@@ -97,3 +97,92 @@ Vuex是Vue的单一状态树,什么是单一状态树,简单来说就是Vuex把�
    在`applyMixin`中,会判断`Vue`的版本,如果是2.0以上版本会将`vuexInit`混入至全局`beforeCreate`钩子中, 否则就重写`Vue`的 `_init`函数,在`_init`函数中调用`vuexInit`,而`vuexInit`本质上只做了一件事,判断当前vue实例中是否有`store`属性,有的话将自身的`$store`属性设置为该值,如果没有则将父组件的`$store`设置为自身的`$store`这样在整个组件树中,所以的组件都是引用的同一个对象,
 
 2. `Store`
+
+   `Store`提供了`Vuex`的核心流程,首先看一下它的`constructor`函数
+
+   ```javascript
+     constructor (options = {}) {
+       // Auto install if it is not done yet and `window` has `Vue`.
+       // To allow users to avoid auto-installation in some cases,
+       // this code should be placed here. See #731
+       if (!Vue && typeof window !== 'undefined' && window.Vue) {
+         install(window.Vue)
+       }
+   
+       if (process.env.NODE_ENV !== 'production') {
+         assert(Vue, `must call Vue.use(Vuex) before creating a store instance.`)
+         assert(typeof Promise !== 'undefined', `vuex requires a Promise polyfill in this browser.`)
+         assert(this instanceof Store, `store must be called with the new operator.`)
+       }
+   
+       const {
+         plugins = [],
+         strict = false
+       } = options
+   
+       // store internal state
+       this._committing = false
+       this._actions = Object.create(null)
+       this._actionSubscribers = []
+       this._mutations = Object.create(null)
+       this._wrappedGetters = Object.create(null)
+       this._modules = new ModuleCollection(options)
+       this._modulesNamespaceMap = Object.create(null)
+       this._subscribers = []
+       this._watcherVM = new Vue()
+   
+       // bind commit and dispatch to self
+       const store = this
+       const { dispatch, commit } = this
+       this.dispatch = function boundDispatch (type, payload) {
+         return dispatch.call(store, type, payload)
+       }
+       this.commit = function boundCommit (type, payload, options) {
+         return commit.call(store, type, payload, options)
+       }
+   
+       // strict mode
+       this.strict = strict
+   
+       const state = this._modules.root.state
+   
+       // init root module.
+       // this also recursively registers all sub-modules
+       // and collects all module getters inside this._wrappedGetters
+       installModule(this, state, [], this._modules.root)
+   
+       // initialize the store vm, which is responsible for the reactivity
+       // (also registers _wrappedGetters as computed properties)
+       resetStoreVM(this, state)
+   
+       // apply plugins
+       plugins.forEach(plugin => plugin(this))
+   
+       const useDevtools = options.devtools !== undefined ? options.devtools : Vue.config.devtools
+       if (useDevtools) {
+         devtoolPlugin(this)
+       }
+     }
+   ```
+
+   在前面的install中我们提到,`Store`文件中维护了一个私有变量`Vue`来判断是否安装过,在`Store`构造函数中同样进行了判断,如果`Vue`变量为空,则进行安装流程,之后进行了三次断言,分别判断是否安装,是否存在`Promise`,当前实例是否通过`new`操作符构造,
+
+   首先我们看一下`options`的结构
+
+   > state:Vuex store 实例的根 state 对象。
+   >
+   > mutations：在 store 上注册 mutation，处理函数总是接受 `state` 作为第一个参数
+   >
+   > actions：在 store 上注册 action。处理函数总是接受 `context` 作为第一个参数，
+   >
+   > getters:在 store 上注册 getter，
+   >
+   > modules:包含了子模块的对象，会被合并到 store
+   >
+   > plugins:一个数组，包含应用在 store 上的插件方法。这些插件直接接收 store 作为唯一参数，可以监听 	   mutation或者提交 mutation
+   >
+   > strict:使 Vuex store 进入严格模式，在严格模式下，任何 mutation 处理函数以外修改 Vuex state 都会抛出错误。
+   >
+   > devtools:为某个特定的 Vuex 实例打开或关闭 devtools。
+
+   好，我们来看看vuex是如何使用这些属性的:
