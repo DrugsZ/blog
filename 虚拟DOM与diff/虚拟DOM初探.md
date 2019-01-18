@@ -6,5 +6,41 @@
 
 ​	随着前端应用越来越复杂，手动操作DOM也越来越复杂，而且总的来说，整个过程还是从后端请求到数据后，根据数据决定如何去渲染操作DOM，那么能不能通过函数直接将数据渲染为DOM，而我们只需要关心数据，这就是Vue/React这类框架的思想,创建数组到UI的映射函数来实现只需要关心数据,自动生成UI,这个其实也就是早就已经有的模板引擎的功能,那么React/Vue跟早就已有的模板引擎有什么区别呢?
 
-​	首先来说,我们简单的想一下,
+首先来说,我们简单的想一下,当我们要手动创建一个DOM节点时需要什么?
+
+```
+tag,attr,style,class,event,children
+```
+
+这样的话我们可以简单的通过一个Javascript来表示将要创建的DOM节点
+
+```js
+const willCreate = {
+    tag:'div',
+    attr:{},
+    style:{},
+    className:{},
+    event:{}
+    children:[]
+}
+
+const createElement = (vnode) => {
+    if(!vnode) return;
+    const {tag,attr,style,className,children} = vnode
+    const elm = document.createElement(tag);
+    applyAttr(elm,attr);
+    applyStyle(elm,style);
+    applyClass(elm,className);
+    applyEvent(elm,event);
+    let len = children.length
+    if(len){
+        while(--len){
+            elm.appendChild(createElement(children[len]));
+        }
+    }
+    return elm;
+}
+```
+
+
 
