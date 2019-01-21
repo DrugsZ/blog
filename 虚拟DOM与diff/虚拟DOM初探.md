@@ -20,7 +20,7 @@ const willCreate = {
     attr:{},
     style:{},
     className:{},
-    event:{}
+    event:{},
     children:[]
 }
 
@@ -136,3 +136,82 @@ function patchVnode(oldVnode: VNode, vnode: VNode, insertedVnodeQueue: VNodeQueu
 - 当新老节点都不存在`children`时
   - 如果新节点不存在text属性,怎清空挂载DOM的textContent
   - 如果新节点存在text值,则设置挂载DOM的textContent为新节点的text值
+
+从上面的代码中可以看出,`updateChildren`是整个`patch`最核心的函数,就是这个函数中所运用的`diff`算法,使得整个节点复用效率大大提高,看一下`updateChildren`
+```typescript
+function updateChildren(parentElm: Node,
+                          oldCh: Array<VNode>,
+                          newCh: Array<VNode>,
+                          insertedVnodeQueue: VNodeQueue) {
+    let oldStartIdx = 0, newStartIdx = 0;
+    let oldEndIdx = oldCh.length - 1;
+    let oldStartVnode = oldCh[0];
+    let oldEndVnode = oldCh[oldEndIdx];
+    let newEndIdx = newCh.length - 1;
+    let newStartVnode = newCh[0];
+    let newEndVnode = newCh[newEndIdx];
+    let oldKeyToIdx: any;
+    let idxInOld: number;
+    let elmToMove: VNode;
+    let before: any;
+
+    while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+      if (oldStartVnode == null) {
+        oldStartVnode = oldCh[++oldStartIdx]; // Vnode might have been moved left
+      } else if (oldEndVnode == null) {
+        oldEndVnode = oldCh[--oldEndIdx];
+      } else if (newStartVnode == null) {
+        newStartVnode = newCh[++newStartIdx];
+      } else if (newEndVnode == null) {
+        newEndVnode = newCh[--newEndIdx];
+      } else if (sameVnode(oldStartVnode, newStartVnode)) {
+        patchVnode(oldStartVnode, newStartVnode, insertedVnodeQueue);
+        oldStartVnode = oldCh[++oldStartIdx];
+        newStartVnode = newCh[++newStartIdx];
+      } else if (sameVnode(oldEndVnode, newEndVnode)) {
+        patchVnode(oldEndVnode, newEndVnode, insertedVnodeQueue);
+        oldEndVnode = oldCh[--oldEndIdx];
+        newEndVnode = newCh[--newEndIdx];
+      } else if (sameVnode(oldStartVnode, newEndVnode)) { // Vnode moved right
+        patchVnode(oldStartVnode, newEndVnode, insertedVnodeQueue);
+        api.insertBefore(parentElm, oldStartVnode.elm as Node, api.nextSibling(oldEndVnode.elm as Node));
+        oldStartVnode = oldCh[++oldStartIdx];
+        newEndVnode = newCh[--newEndIdx];
+      } else if (sameVnode(oldEndVnode, newStartVnode)) { // Vnode moved left
+        patchVnode(oldEndVnode, newStartVnode, insertedVnodeQueue);
+        api.insertBefore(parentElm, oldEndVnode.elm as Node, oldStartVnode.elm as Node);
+        oldEndVnode = oldCh[--oldEndIdx];
+        newStartVnode = newCh[++newStartIdx];
+      } else {
+        if (oldKeyToIdx === undefined) {
+          oldKeyToIdx = createKeyToOldIdx(oldCh, oldStartIdx, oldEndIdx);
+        }
+        idxInOld = oldKeyToIdx[newStartVnode.key as string];
+        if (isUndef(idxInOld)) { // New element
+          api.insertBefore(parentElm, createElm(newStartVnode, insertedVnodeQueue), oldStartVnode.elm as Node);
+          newStartVnode = newCh[++newStartIdx];
+        } else {
+          elmToMove = oldCh[idxInOld];
+          if (elmToMove.sel !== newStartVnode.sel) {
+            api.insertBefore(parentElm, createElm(newStartVnode, insertedVnodeQueue), oldStartVnode.elm as Node);
+          } else {
+            patchVnode(elmToMove, newStartVnode, insertedVnodeQueue);
+            oldCh[idxInOld] = undefined as any;
+            api.insertBefore(parentElm, (elmToMove.elm as Node), oldStartVnode.elm as Node);
+          }
+          newStartVnode = newCh[++newStartIdx];
+        }
+      }
+    }
+    if (oldStartIdx <= oldEndIdx || newStartIdx <= newEndIdx) {
+      if (oldStartIdx > oldEndIdx) {
+        before = newCh[newEndIdx+1] == null ? null : newCh[newEndIdx+1].elm;
+        addVnodes(parentElm, before, newCh, newStartIdx, newEndIdx, insertedVnodeQueue);
+      } else {
+        removeVnodes(parentElm, oldCh, oldStartIdx, oldEndIdx);
+      }
+    }
+  }
+```
+在`updateChildren`中`snabbdom`使用了双索引对比,新旧节点同时维护前后两个索引,然后像中间进发,逐个对比,
+在每次对比时会存在四个节点`newStartVnode`,`newEndVnode`,`oldStartVnode`,`oldEndVnode`两两对比
