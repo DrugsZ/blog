@@ -1,8 +1,8 @@
-步骤
+### rc-animate源码浅析
 
 #### 前言
 
-`antd`组件库大量使用了`react-component`的组件,而`antd`我们可以理解为是对`react-component`的上层封装,比如`Form`,同时有大量的`react-component`组件并不是想`Form`一样被封装一下使用,而是在其中起到了重要的协助作用,比如负责动画效果的`rc-animate`组件,
+`antd`组件库大量使用了`react-component`的组件,而`antd`我们可以理解为是对`react-component`的上层封装,比如`Form`,同时有大量的`react-component`组件并不是像`Form`一样被封装一下使用,而是在其中起到了重要的协助作用,比如负责动画效果的`rc-animate`组件,
 
 #### 责任划分
 
@@ -94,7 +94,7 @@ render() {
 
 ##### componentDidMount
 
-`render`结束后,`componentDidMount`回调函数会被调起,
+`render`结束后,`componentDidMount`生命周期函数会被调起,
 
 ```js
   componentDidMount() {
@@ -115,13 +115,13 @@ render() {
 
 
 
-在`componentDidMount`中我们看到其首先获取我们之前缓存的子元素节点,随后通过`showProp`属性筛选出来所以配置为显示项的子节点,推入`children`队列,随后遍历调用`performAppear`方法,可以看到`componentDidMount`生命周期函数是极其简单的,只是做了两件事,筛选和遍历,而`performAppear`我们从字面意思上来看是执行原本就存在的动画,那我们先不管他,跟随`React`的生命周期继续往下
+在`componentDidMount`中我们看到其首先获取我们之前缓存的子元素节点,随后通过`showProp`属性筛选出来所有配置为显示项的子节点,推入`children`队列,随后遍历调用`performAppear`方法,可以看到`componentDidMount`生命周期函数是极其简单的,只是做了两件事,筛选和遍历,而`performAppear`我们从字面意思上来看是执行原本就存在的动画,那我们先不管他,跟随`React`的生命周期继续往下
 
 ##### componentWillReceiveProps
 
 `componentWillReceiveProps`函数可以说是当前整个组件的核心
 
-我们现在自己想象一下,如果我们要实现一个动画调节的容器组件,最重要也是最核心的就是我们要分辨哪些元素应该应用哪些动画,也就是说,我们需要知道哪些是移入,哪些是移除,也就是我们在初始化中提到的`keysToEnter`和`keysToLeave`两个队列.而要分别的时机就是在`componentWillReceiveProps`生命周期中,我们可以对新旧两组子元素进行对比,这也就是`state.children`的作用,我们可以认为`state.children`是一个缓冲区,它存储了新旧子节点中所有节点,这其中包括我们提到了,没存在将要移入的,存在将要移除的,原本一直存在的,我们具体看一下代码的处理
+我们现在自己想象一下,如果我们要实现一个动画调节的容器组件,最重要也是最核心的就是我们要分辨哪些元素应该应用哪些动画,也就是说,我们需要知道哪些是移入,哪些是移除,也就是我们在初始化中提到的`keysToEnter`和`keysToLeave`两个队列.而要分辨的时机就是在`componentWillReceiveProps`生命周期中,我们可以对新旧两组子元素进行对比,这也就是`state.children`的作用,我们可以认为`state.children`是一个缓冲区,它存储了新旧子节点中所有节点,这其中包括我们提到了,没存在将要移入的,存在将要移除的,原本一直存在的,我们具体看一下代码的处理
 
 ```js
 componentWillReceiveProps(nextProps) {
@@ -278,7 +278,7 @@ componentWillReceiveProps(nextProps) {
 
    随后进入到核心步骤,因为核心都在`showProp`为`true`的判断项,我们来看一下,我们对上面获取到的`currentChildren`进行遍历,对每一个组件根据`key`通过`findChildInChildrenByKey`函数在新`props`的子节点中进行查找,查找在新的子节点中是否还存在这个子节点,随后继续进行判断,如果新节点不再存在或者新节点的`showProp`属性为`false`,同时原先缓存子节点中存在该节点,则克隆一个`showProp`为`true`的子节点赋值给`newChild`,如果判断未通过,则直接将`nextChild`赋值给`newChild`,随后只要`newChild`存在值,则将其推入`newChildren`中,判断2则对新`props`中的所有子节点进行遍历,新节点的处理则非常简单,如果当前节点值为`false`或者是我们之前缓存的节点中没有找到新节点,则将其推入`newChildren`,
 
-   现在我们回过头来看,判断1主要是计算了之前没有,或者之前没显示,也就是将要移入的又或者是一直存在的子节点,而判断2则计算了将要移除的子节点,随后将他们赋值到`state.children`,这也就是我们前面说道的缓存的作用,他综合了新旧两个子节点中所有要执行动画的值,缓存下来,等待后续的进一步处理
+   现在我们回过头来看,判断1主要是计算了之前没有,或者之前没显示,也就是将要移入的又或者是一直存在的子节点,而判断2则计算了将要移除的子节点,随后将他们赋值到`state.children`,这也就是我们前面说到的缓存的作用,他综合了新旧两个子节点中所有要执行动画的子节点,缓存下来,等待后续的进一步处理
 
 3. 队列处理
 
